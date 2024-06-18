@@ -45,7 +45,6 @@ class MovieActor(db.Model):
     actor_id = db.Column(db.Integer, db.ForeignKey('actors.actor_id'), primary_key=True)
 
 
-# Load data endpoint
 @app.route('/load-data', methods=['POST'])
 def load_data_endpoint():
     file = request.files['file']
@@ -54,43 +53,69 @@ def load_data_endpoint():
     elif file.filename.endswith('.xlsx'):
         df = pd.read_excel(file)
     else:
-        return "Unsupported file format", 400
+        return jsonify({"error": "Unsupported file format"}), 400
 
-    # Assuming the columns in the CSV/XLSX are Title, ReleaseYear, Genre, Rating, Director, Actors
-    for _, row in df.iterrows():
-        director = Director.query.filter_by(name=row['director']).first()
-        if not director:
-            director = Director(name=row['director'])
-            db.session.add(director)
-            db.session.commit()
+    try:
+        for _, row in df.iterrows():
+            print(f"Processing row: {row.to_dict()}")  # Debug print
 
-        try:
-            rating = float(row['avg_vote'])
-        except:
-            rating = None
-
-        movie = Movie(
-            title=row['title'],
-            release_year=row['year'],
-            genre=row['genre'],
-            rating=row['avg_vote'],
-            director_id=director.director_id
-        )
-        db.session.add(movie)
-        db.session.commit()
-
-        actors = row['actors'].split(', ')
-        for actor_name in actors:
-            actor = Actor.query.filter_by(name=actor_name).first()
-            if not actor:
-                actor = Actor(name=actor_name)
-                db.session.add(actor)
+            # Handle director
+            director_name = row['director']
+            director = Director.query.filter_by(name=director_name).first()
+            if not director:
+                director = Director(name=director_name)
+                db.session.add(director)
                 db.session.commit()
+                director = Director.query.filter_by(name=director_name).first()
 
-            movie_actor = MovieActor(movie_id=movie.movie_id, actor_id=actor.actor_id)
-            db.session.add(movie_actor)
-    db.session.commit()
-    return 'Data loaded successfully', 200
+            # Ensure rating is a float, else set to None or default value
+            try:
+                rating = float(row['avg_vote'])
+            except (ValueError, TypeError):
+                rating = None  # or set to a default value like 0.0
+
+            # Handle movie
+            movie = Movie.query.filter_by(title=row['title'], director_id=director.director_id).first()
+            if not movie:
+                movie = Movie(
+                    title=row['title'],
+                    release_year=row['year'],
+                    genre=row['genre'],
+                    rating=rating,
+                    director_id=director.director_id
+                )
+                db.session.add(movie)
+                db.session.commit()
+                movie = Movie.query.filter_by(title=row['title'], director_id=director.director_id).first()
+
+            # Ensure actors column is processed correctly
+            if isinstance(row['actors'], str):
+                actor_names = row['actors'].split(', ')
+            else:
+                actor_names = []  # or handle as needed
+
+            # Handle actors and relationships
+            for actor_name in actor_names:
+                actor = Actor.query.filter_by(name=actor_name).first()
+                if not actor:
+                    actor = Actor(name=actor_name)
+                    db.session.add(actor)
+                    db.session.commit()
+                    actor = Actor.query.filter_by(name=actor_name).first()
+
+                # Check if the movie_actor relationship already exists
+                movie_actor = MovieActor.query.filter_by(movie_id=movie.movie_id, actor_id=actor.actor_id).first()
+                if not movie_actor:
+                    movie_actor = MovieActor(movie_id=movie.movie_id, actor_id=actor.actor_id)
+                    db.session.add(movie_actor)
+                    db.session.commit()
+
+        return jsonify({"message": "Data loaded successfully"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # Export data endpoint
