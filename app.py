@@ -64,6 +64,11 @@ def load_data_endpoint():
             db.session.add(director)
             db.session.commit()
 
+        try:
+            rating = float(row['avg_vote'])
+        except:
+            rating = None
+
         movie = Movie(
             title=row['title'],
             release_year=row['year'],
@@ -130,4 +135,4 @@ def export_data():
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
