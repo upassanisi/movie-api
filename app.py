@@ -58,23 +58,23 @@ def load_data_endpoint():
 
     # Assuming the columns in the CSV/XLSX are Title, ReleaseYear, Genre, Rating, Director, Actors
     for _, row in df.iterrows():
-        director = Director.query.filter_by(name=row['Director']).first()
+        director = Director.query.filter_by(name=row['director']).first()
         if not director:
-            director = Director(name=row['Director'])
+            director = Director(name=row['director'])
             db.session.add(director)
             db.session.commit()
 
         movie = Movie(
-            title=row['Title'],
-            release_year=row['ReleaseYear'],
-            genre=row['Genre'],
-            rating=row['Rating'],
+            title=row['title'],
+            release_year=row['year'],
+            genre=row['genre'],
+            rating=row['avg_vote'],
             director_id=director.director_id
         )
         db.session.add(movie)
         db.session.commit()
 
-        actors = row['Actors'].split(', ')
+        actors = row['actors'].split(', ')
         for actor_name in actors:
             actor = Actor.query.filter_by(name=actor_name).first()
             if not actor:
